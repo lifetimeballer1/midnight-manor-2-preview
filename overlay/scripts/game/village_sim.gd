@@ -55,10 +55,11 @@ var stand_cache: Dictionary = {}
 # Raid alarms used to make every villager request a fresh route on one tick.
 # Keep pathfinding authoritative, but spread NEW friendly plans across frames.
 var alarm_friendly_routes_left: int = 0
-const ALARM_FRIENDLY_ROUTE_BUDGET: int = 16
-# Civilians leave a few fresh-route slots available for defenders once the
-# raiders appear, so smoothing the evacuation never makes combat sluggish.
-const ALARM_COMBAT_ROUTE_RESERVE: int = 4
+# Civilians now shelter without pathfinding, so this budget belongs entirely
+# to defenders. Eight fresh plans per 50 ms tick keeps combat responsive while
+# preventing a 30-40 defender route burst from stalling one rendered frame.
+const ALARM_FRIENDLY_ROUTE_BUDGET: int = 8
+const ALARM_COMBAT_ROUTE_RESERVE: int = 0
 
 const KITE_TRIGGER: float = 1.5
 const KITE_RELEASE_RATIO: float = 0.7
