@@ -42,7 +42,11 @@ var inspect_text: Label
 var inspect_hp: ProgressBar
 var inspect_reserve: ProgressBar
 var sidebar := PanelContainer.new()
+var side_scroll := ScrollContainer.new()
 var side_content := VBoxContainer.new()
+var side_close_button: Button
+var side_scroll_up: Button
+var side_scroll_down: Button
 var bottom := PanelContainer.new()
 var placement_box := PanelContainer.new()
 var placement_label := Label.new()
@@ -1310,10 +1314,28 @@ func _ui() -> void:
 	nav_shop.tooltip_text = "Raise new structures"
 	_build_more_sheet(root_control)
 	root_control.add_child(sidebar)
-	var side_scroll := ScrollContainer.new()
+	var side_shell := VBoxContainer.new()
+	side_shell.add_theme_constant_override("separation", 6)
+	sidebar.add_child(side_shell)
+	var side_controls := HBoxContainer.new()
+	side_controls.add_theme_constant_override("separation", 6)
+	side_shell.add_child(side_controls)
+	side_close_button = ui.command_button("Close", _close_panel, side_controls, 40.0)
+	side_close_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	side_scroll_up = ui.command_button("▲", _scroll_sidebar.bind(-1), side_controls, 40.0)
+	side_scroll_up.tooltip_text = "Scroll menu up"
+	side_scroll_down = ui.command_button("▼", _scroll_sidebar.bind(1), side_controls, 40.0)
+	side_scroll_down.tooltip_text = "Scroll menu down"
 	side_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	sidebar.add_child(side_scroll)
+	side_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	side_scroll.follow_focus = true
+	side_scroll.scroll_deadzone = 0
+	side_scroll.scroll_vertical_custom_step = 72.0
+	side_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	side_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	side_shell.add_child(side_scroll)
 	side_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	side_content.add_theme_constant_override("separation", 6)
 	side_scroll.add_child(side_content)
 	sidebar.hide()
 	root_control.add_child(placement_box)
@@ -1475,8 +1497,8 @@ func _layout_ui() -> void:
 	resource_stack.position = Vector2(size.x - stack_width - safe, safe)
 	if small:
 		# Bottom sheet like the shop ref: full-width, above the bottom bar.
-		var sheet_max: float = maxf(160.0, size.y - bar_h - safe * 3.0 - 96.0)
-		var sheet_h: float = clampf(size.y * 0.45, minf(160.0, sheet_max), sheet_max)
+		var sheet_max: float = maxf(220.0, size.y - bar_h - safe * 3.0 - 96.0)
+		var sheet_h: float = clampf(size.y * 0.56, minf(220.0, sheet_max), sheet_max)
 		sidebar.position = Vector2(safe, size.y - bar_h - safe - 8.0 - sheet_h)
 		sidebar.size = Vector2(size.x - safe * 2.0, sheet_h)
 	else:
@@ -1484,6 +1506,11 @@ func _layout_ui() -> void:
 		sidebar.size = Vector2(size.x - 32 if narrow else 310.0, maxf(130, size.y - sidebar.position.y - bottom.size.y - 28))
 	more_sheet.position = sidebar.position
 	more_sheet.size = sidebar.size
+	if side_scroll_up != null and is_instance_valid(side_scroll_up):
+		side_scroll_up.visible = small
+	if side_scroll_down != null and is_instance_valid(side_scroll_down):
+		side_scroll_down.visible = small
+	side_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_ALWAYS if small else ScrollContainer.SCROLL_MODE_AUTO
 	# Compact resource pills on phones: values only, bars stay on desktop.
 	for resource: String in resource_bars:
 		var gauge: ProgressBar = resource_bars[resource]
@@ -1510,10 +1537,17 @@ func _clear_sidebar() -> void:
 	for child in side_content.get_children():
 		side_content.remove_child(child)
 		child.queue_free()
-	ui.command_button("Close", _close_panel, side_content, 36.0)
+
+
+func _scroll_sidebar(direction: int) -> void:
+	if side_scroll == null or not is_instance_valid(side_scroll):
+		return
+	var page: int = maxi(120, int(side_scroll.size.y * 0.72))
+	side_scroll.scroll_vertical = maxi(0, side_scroll.scroll_vertical + page * direction)
 
 
 func _open_panel(which: String) -> void:
+	var previous_panel: String = panel
 	if panel == "pause" and which != "pause": paused = false
 	panel = which
 	more_sheet.hide()
@@ -1562,6 +1596,8 @@ func _open_panel(which: String) -> void:
 			_unit_inspector()
 		"pause":
 			_pause_panel()
+	if previous_panel != which:
+		side_scroll.set_deferred("scroll_vertical", 0)
 	_layout_ui()
 
 
