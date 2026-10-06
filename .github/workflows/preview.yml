@@ -1,0 +1,102 @@
+name: Midnight Manor II Preview
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: preview-pages
+  cancel-in-progress: true
+
+env:
+  GODOT_VERSION: 4.7.2
+  GODOT_STATUS: stable
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout current gbt preview source
+        run: |
+          git clone --depth 1 --branch gbt https://github.com/lifetimeballer1/midnight-manor-2.git source
+          cd source
+          echo "Preview source commit: $(git rev-parse HEAD)"
+
+      - name: Download Godot headless + export templates
+        run: |
+          set -eux
+          BASE="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-${GODOT_STATUS}"
+          wget -q "${BASE}/Godot_v${GODOT_VERSION}-${GODOT_STATUS}_linux.x86_64.zip" -O godot.zip
+          unzip -q godot.zip
+          chmod +x "Godot_v${GODOT_VERSION}-${GODOT_STATUS}_linux.x86_64"
+          sudo mv "Godot_v${GODOT_VERSION}-${GODOT_STATUS}_linux.x86_64" /usr/local/bin/godot
+          wget -q "${BASE}/Godot_v${GODOT_VERSION}-${GODOT_STATUS}_export_templates.tpz" -O templates.tpz
+          mkdir -p ~/.local/share/godot/export_templates/${GODOT_VERSION}.${GODOT_STATUS}
+          unzip -q templates.tpz -d /tmp/godot_templates
+          cp -r /tmp/godot_templates/templates/* ~/.local/share/godot/export_templates/${GODOT_VERSION}.${GODOT_STATUS}/
+          godot --version
+
+      - name: Import project
+        working-directory: source
+        run: godot --headless --editor --import --path .
+
+      - name: Verify assets
+        working-directory: source
+        run: python3 scripts/verify_assets.py
+
+      - name: Run Python tests
+        working-directory: source
+        run: python3 -m unittest discover -s tests -p 'test_*.py' -q
+
+      - name: Run gameplay regression suites
+        working-directory: source
+        run: |
+          godot --headless --path . --script res://tests/test_village.gd -- --no-save
+          godot --headless --path . --script res://tests/test_game_scene.gd -- --no-save
+          godot --headless --path . --script res://tests/test_workers_defense.gd -- --no-save
+          godot --headless --path . --script res://tests/test_living_village.gd -- --no-save
+          godot --headless --path . --script res://tests/test_update2_scene.gd -- --no-save
+          godot --headless --path . --script res://tests/test_fortress_command.gd -- --no-save
+
+      - name: Export Web
+        working-directory: source
+        run: |
+          mkdir -p build/web
+          godot --headless --path . --export-release "Web" build/web/index.html
+          ls -la build/web
+
+      - name: Guard Safari compatibility
+        working-directory: source
+        run: |
+          grep -q 'variant/thread_support=false' export_presets.cfg \
+            || (echo "FAIL: preview must stay single-threaded for Safari" && exit 1)
+          grep -q 'GODOT_THREADS_ENABLED = false' build/web/index.html \
+            || (echo "FAIL: exported preview has threads enabled" && exit 1)
+          echo "Safari guard PASS: single-threaded preview build"
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: source/build/web
+
+  deploy:
+    needs: export
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy preview to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
