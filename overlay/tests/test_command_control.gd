@@ -67,10 +67,18 @@ func _run() -> void:
 	check(game.side_scroll != null and game.side_scroll.vertical_scroll_mode != ScrollContainer.SCROLL_MODE_DISABLED, "long manor panels retain vertical scrolling")
 	check(game.side_content.get_combined_minimum_size().y > game.side_scroll.size.y, "400-person menu exceeds the viewport and remains scrollable")
 	check(game.side_close_button != null and game.side_close_button.get_parent() != game.side_content, "menu close control stays pinned outside scrolling content")
+	check(game.side_scroll.scroll_deadzone >= 8, "menu scrolling keeps a touch deadzone so button taps do not turn into accidental swipes")
 	var scroll_before: int = game.side_scroll.scroll_vertical
 	game._scroll_sidebar(1)
 	await process_frame
 	check(game.side_scroll.scroll_vertical > scroll_before, "phone menu paging control advances long menus")
+	game._toggle_more()
+	await process_frame
+	check(game.more_sheet.visible and game.more_scroll != null, "More actions opens inside a dedicated scroll container")
+	check(game.more_close_button != null and game.more_close_button.get_parent() != game.more_scroll, "More close control stays pinned outside scrolling content")
+	check(game.more_scroll.vertical_scroll_mode != ScrollContainer.SCROLL_MODE_DISABLED, "More actions supports vertical scrolling")
+	check(game.more_scroll.scroll_deadzone >= 8, "More actions uses the same tap-safe scroll deadzone")
+	game._toggle_more()
 
 	game.battery_saver = true
 	game._apply_power_settings()
