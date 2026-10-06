@@ -55,7 +55,7 @@ func _run() -> void:
 	for unit: Dictionary in raid_sim.units:
 		if int(unit.get("edge_bid", -999)) == hall_id:
 			evac_planned += 1
-	check(evac_planned > 0 and evac_planned <= raid_sim.ALARM_FRIENDLY_ROUTE_BUDGET, "raid warning staggers fresh civilian evacuation plans instead of replanning all 400 at once")
+	check(evac_planned > 0 and evac_planned <= raid_sim.ALARM_FRIENDLY_ROUTE_BUDGET - raid_sim.ALARM_COMBAT_ROUTE_RESERVE, "raid warning staggers civilian evacuation and preserves route capacity for defenders")
 	check(raid_sim.living.navigation_revision == nav_before_alarm, "panic evacuation does not rewrite desire-path navigation")
 	var raid_worst_ms: float = raid_first_tick_ms
 	for tick in 79:
