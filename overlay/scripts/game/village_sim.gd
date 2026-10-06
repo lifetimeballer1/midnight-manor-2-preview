@@ -996,9 +996,17 @@ func _path_reachable(u: Dictionary, target: Vector2, enemy: bool) -> bool:
 func _alarm_route_slot_available(u: Dictionary) -> bool:
 	if not raid_active and not raid_warning:
 		return true
+	# An old work/haul path does not count: only an already-planned path to the
+	# Hall edge may bypass this tick's fresh-route budget.
+	var hall_id: int = int(_hall().get("id", -1))
+	var tile := Vector2i(floori(float(u["x"])), floori(float(u["y"])))
+	var edge_goal: Variant = u.get("edge_goal")
+	var edge_tile: Variant = u.get("edge_tile")
 	var cached: Dictionary = paths.get(int(u["id"]), {})
-	if not cached.is_empty() and cached.get("revision") == revision:
-		return true
+	if u.get("edge_rev") == revision and edge_tile is Vector2i and edge_tile == tile and int(u.get("edge_bid", -999)) == hall_id and edge_goal is Vector2:
+		var goal := Vector2i(floori((edge_goal as Vector2).x), floori((edge_goal as Vector2).y))
+		if not cached.is_empty() and cached.get("goal") == goal and cached.get("revision") == revision:
+			return true
 	return alarm_friendly_routes_left > 0
 
 
