@@ -973,8 +973,16 @@ func _cached_edge_goal(u: Dictionary, b: Dictionary, enemy: bool = false) -> Vec
 	# Type guards: older saves may carry these keys as JSON strings.
 	var cached_tile: Variant = u.get("edge_tile")
 	var cached_goal: Variant = u.get("edge_goal")
-	if u.get("edge_rev") == revision and cached_tile is Vector2i and cached_tile == tile and int(u.get("edge_bid", -999)) == bid and cached_goal is Vector2:
-		return cached_goal
+	if u.get("edge_rev") == revision and int(u.get("edge_bid", -999)) == bid and cached_goal is Vector2:
+		# Alarm routes stay stable across tile boundaries. If a gate/world change
+		# invalidates navigation, _invalidate() clears paths and we probe again.
+		if raid_active or raid_warning:
+			var cached_path: Dictionary = paths.get(int(u["id"]), {})
+			var cached_goal_tile := Vector2i(floori((cached_goal as Vector2).x), floori((cached_goal as Vector2).y))
+			if not cached_path.is_empty() and cached_path.get("goal") == cached_goal_tile and cached_path.get("revision") == revision:
+				return cached_goal
+		elif cached_tile is Vector2i and cached_tile == tile:
+			return cached_goal
 	var goal: Vector2 = _edge_goal(u, b, enemy)
 	u["edge_goal"] = goal
 	u["edge_tile"] = tile
@@ -1002,11 +1010,9 @@ func _alarm_route_slot_available(u: Dictionary) -> bool:
 	# An old work/haul path does not count: only an already-planned path to the
 	# Hall edge may bypass this tick's fresh-route budget.
 	var hall_id: int = int(_hall().get("id", -1))
-	var tile := Vector2i(floori(float(u["x"])), floori(float(u["y"])))
 	var edge_goal: Variant = u.get("edge_goal")
-	var edge_tile: Variant = u.get("edge_tile")
 	var cached: Dictionary = paths.get(int(u["id"]), {})
-	if u.get("edge_rev") == revision and edge_tile is Vector2i and edge_tile == tile and int(u.get("edge_bid", -999)) == hall_id and edge_goal is Vector2:
+	if u.get("edge_rev") == revision and int(u.get("edge_bid", -999)) == hall_id and edge_goal is Vector2:
 		var goal := Vector2i(floori((edge_goal as Vector2).x), floori((edge_goal as Vector2).y))
 		if not cached.is_empty() and cached.get("goal") == goal and cached.get("revision") == revision:
 			return true
