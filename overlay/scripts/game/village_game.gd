@@ -1598,10 +1598,13 @@ func _layout_ui() -> void:
 	var banner_h: float = 72.0 if small else 66.0
 	banner_panel.custom_minimum_size = Vector2(0, 0)
 	banner_panel.size = Vector2(banner_w, banner_h)
-	banner_row.custom_minimum_size = Vector2(maxf(0.0, banner_w - 20.0), banner_h - 12.0)
+	# Let the outer banner own vertical sizing. A vertical minimum on this row
+	# gets panel padding added on top and can push Safari's layout past the cap.
+	banner_row.custom_minimum_size = Vector2(maxf(0.0, banner_w - 20.0), 0.0)
 	story_banner.custom_minimum_size = Vector2(38.0, 38.0)
-	banner_label.custom_minimum_size = Vector2(maxf(120.0, banner_w - 78.0), 42.0)
+	banner_label.custom_minimum_size = Vector2(maxf(120.0, banner_w - 78.0), 0.0)
 	banner_label.max_lines_visible = 3 if small else 2
+	banner_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	banner_panel.position = Vector2((size.x - banner_w) * 0.5, maxf(8.0, bar_h + safe * 2.0 + 120.0))
 	welcome.size = Vector2(minf(480, size.x - 36), 0)
 	welcome.position = Vector2((size.x - welcome.size.x) / 2, maxf(110, size.y * 0.28))
