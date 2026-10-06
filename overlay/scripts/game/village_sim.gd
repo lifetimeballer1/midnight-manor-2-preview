@@ -1084,9 +1084,12 @@ func tick(dt: float) -> void:
 		var spec: Dictionary = building_specs[b["type"]]
 		if spec.get("production") != null:
 			var posted: bool = false
-			for u in units:
-				if int(u["workplace"]) == int(b["id"]) and u["hp"] > 0 and u["order"].is_empty() and not u["hold"] and not raid_active and not raid_warning:
-					posted = true
+			# The alarm pauses civilian work. Do not scan hundreds of villagers for
+			# every producer just to discover that nobody is allowed to be posted.
+			if not raid_active and not raid_warning:
+				for u in units:
+					if int(u["workplace"]) == int(b["id"]) and u["hp"] > 0 and u["order"].is_empty() and not u["hold"]:
+						posted = true
 			var rate: float = float(spec["rate"]) * float(spec["tiers"][int(b["tier"]) - 1]["rateMultiplier"]) * (1.25 if posted else 1.0)
 			# Moon Orchards / Full Granaries: food production, not a flat buff.
 			if str(spec.get("production", "")) == "food":
@@ -1236,10 +1239,11 @@ func _unit_tick(u: Dictionary, dt: float) -> void:
 		_fighter(u, dt)
 		return
 	if raid_active or raid_warning:
+		# Civilians are not valid combat targets, so marching 300-400 individual
+		# models to the Hall was pure simulation/render cost. Treat the alarm as
+		# actual shelter: stop civilian AI until the horn clears.
 		_clear_facing(u)
-		if not _alarm_route_slot_available(u):
-			return
-		_walk(u, _cached_edge_goal(u, _hall()), dt)
+		u["phase"] = "shelter"
 		return
 	if role == "builder":
 		for b in buildings:
