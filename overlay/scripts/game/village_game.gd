@@ -1320,11 +1320,21 @@ func _ui() -> void:
 	banner_panel.add_theme_stylebox_override("panel", ui.panel_box(true))
 	banner_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	banner_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	banner_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	banner_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	banner_row.add_theme_constant_override("separation", 8)
 	banner_panel.add_child(banner_row)
 	story_banner = ui.portrait_medallion("", banner_row, 38.0)
 	story_banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	story_banner.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	story_banner.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	banner_label = Label.new()
 	banner_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	banner_label.clip_text = true
+	banner_label.max_lines_visible = 3
+	banner_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	banner_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	banner_label.custom_minimum_size = Vector2(0, 42)
 	banner_label.add_theme_font_size_override("font_size", 13)
 	banner_label.add_theme_color_override("font_color", UI.PARCHMENT_INK)
 	banner_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1581,10 +1591,20 @@ func _layout_ui() -> void:
 			gauge.visible = not small
 	placement_box.position = Vector2(maxf(16, (size.x - 330) / 2), size.y - bottom.size.y - 146)
 	placement_box.size.x = minf(330, size.x - 32)
-	# The story banner sits above the command bar and below the HUD cluster, so
-	# it never covers a control the player needs mid-raid.
+	# Story notifications are bounded to a compact strip. Do not derive their
+	# height from wrapped text: Safari can otherwise collapse the text column,
+	# wrap one character per line, and make the banner taller than the viewport.
 	var banner_w: float = minf(size.x - safe * 2.0, 420.0)
-	banner_panel.size = Vector2(banner_w, banner_panel.get_combined_minimum_size().y)
+	var banner_h: float = 72.0 if small else 66.0
+	banner_panel.custom_minimum_size = Vector2(0, 0)
+	banner_panel.size = Vector2(banner_w, banner_h)
+	# Let the outer banner own vertical sizing. A vertical minimum on this row
+	# gets panel padding added on top and can push Safari's layout past the cap.
+	banner_row.custom_minimum_size = Vector2(maxf(0.0, banner_w - 20.0), 0.0)
+	story_banner.custom_minimum_size = Vector2(38.0, 38.0)
+	banner_label.custom_minimum_size = Vector2(maxf(120.0, banner_w - 78.0), 0.0)
+	banner_label.max_lines_visible = 3 if small else 2
+	banner_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	banner_panel.position = Vector2((size.x - banner_w) * 0.5, maxf(8.0, bar_h + safe * 2.0 + 120.0))
 	welcome.size = Vector2(minf(480, size.x - 36), 0)
 	welcome.position = Vector2((size.x - welcome.size.x) / 2, maxf(110, size.y * 0.28))

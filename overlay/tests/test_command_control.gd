@@ -151,6 +151,20 @@ func _run() -> void:
 	check(game.more_scroll.scroll_deadzone >= 8, "More actions uses the same tap-safe scroll deadzone")
 	game._toggle_more()
 
+	# Phone story banners must stay compact even with a long Chronicle line.
+	root.size = Vector2i(390, 844)
+	await process_frame
+	game._layout_ui()
+	game.banner_label.text = "The Moon Dial stands in the open while the settlement waits beneath the turning sky."
+	game.banner_panel.show()
+	await process_frame
+	check(game.banner_panel.size.y <= 74.0, "phone Chronicle banner has a bounded height")
+	check(game.banner_label.size.x >= 120.0, "Chronicle text keeps a usable phone-width column")
+	check(game.story_banner.size.y <= 44.0, "Chronicle portrait stays medallion-sized instead of stretching with wrapped text")
+	root.size = Vector2i(1280, 800)
+	await process_frame
+	game._layout_ui()
+
 	game.battery_saver = true
 	game._apply_power_settings()
 	check(Engine.max_fps == 30, "battery saver caps rendering at 30 fps")
