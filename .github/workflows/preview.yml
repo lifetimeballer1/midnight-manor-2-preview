@@ -1,6 +1,16 @@
-name: Refresh Midnight Manor II Preview
+name: Midnight Manor II Command & Control Preview
 
 on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'overlay/**'
+      - '.github/workflows/preview.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'overlay/**'
+      - '.github/workflows/preview.yml'
   workflow_dispatch:
 
 permissions:
@@ -9,16 +19,27 @@ permissions:
 env:
   GODOT_VERSION: 4.7.2
   GODOT_STATUS: stable
+  SOURCE_SHA: 1e51468d492bd047bf434ae65aba09fe5efcfb42
 
 jobs:
-  refresh:
+  verify-and-preview:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout current gbt preview source
+      - name: Checkout preview staging files
+        uses: actions/checkout@v4
+        with:
+          path: staging
+
+      - name: Checkout audited Midnight Manor II source
         run: |
-          git clone --depth 1 --branch gbt https://github.com/lifetimeballer1/midnight-manor-2.git source
+          git clone https://github.com/lifetimeballer1/midnight-manor-2.git source
           cd source
-          echo "Preview source commit: $(git rev-parse HEAD)"
+          git checkout "$SOURCE_SHA"
+          echo "Command & Control base: $(git rev-parse HEAD)"
+
+      - name: Apply Command & Control overlay
+        run: |
+          rsync -a staging/overlay/ source/
 
       - name: Download Godot headless + export templates
         run: |
@@ -54,7 +75,8 @@ jobs:
           godot --headless --path . --script res://tests/test_workers_defense.gd -- --no-save
           godot --headless --path . --script res://tests/test_living_village.gd -- --no-save
           godot --headless --path . --script res://tests/test_update2_scene.gd -- --no-save
-          godot --headless --path . --script res://tests/test_fortress_command.gd -- --no-save
+          godot --headless --path . --script res://tests/test_chronicle.gd -- --no-save
+          godot --headless --path . --script res://tests/test_command_control.gd -- --no-save
 
       - name: Export Web
         working-directory: source
@@ -66,22 +88,17 @@ jobs:
       - name: Guard Safari compatibility
         working-directory: source
         run: |
-          grep -q 'variant/thread_support=false' export_presets.cfg \
-            || (echo "FAIL: preview must stay single-threaded for Safari" && exit 1)
-          grep -q 'GODOT_THREADS_ENABLED = false' build/web/index.html \
-            || (echo "FAIL: exported preview has threads enabled" && exit 1)
+          grep -q 'variant/thread_support=false' export_presets.cfg             || (echo "FAIL: preview must stay single-threaded for Safari" && exit 1)
+          grep -q 'GODOT_THREADS_ENABLED = false' build/web/index.html             || (echo "FAIL: exported preview has threads enabled" && exit 1)
           echo "Safari guard PASS: single-threaded preview build"
 
       - name: Publish compiled preview to main
+        if: github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git clone --branch main "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" preview
-          rsync -a --delete \
-            --exclude='.git/' \
-            --exclude='.github/' \
-            --exclude='README.md' \
-            source/build/web/ preview/
+          rsync -a --delete             --exclude='.git/'             --exclude='.github/'             --exclude='README.md'             --exclude='overlay/'             source/build/web/ preview/
           cd preview
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -89,6 +106,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "Preview already current."
           else
-            git commit -m "Refresh phone preview from gbt"
+            git commit -m "Publish Command & Control preview build"
             git push origin main
           fi
