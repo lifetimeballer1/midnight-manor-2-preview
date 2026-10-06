@@ -157,6 +157,10 @@ var combat_banner := Label.new()
 var toast := PanelContainer.new()
 var toast_label := Label.new()
 var more_sheet := PanelContainer.new()
+var more_scroll := ScrollContainer.new()
+var more_close_button: Button
+var more_scroll_up: Button
+var more_scroll_down: Button
 var road_layer := Node3D.new()
 var road_dirt := MeshInstance3D.new()
 var road_stone := MeshInstance3D.new()
@@ -879,14 +883,22 @@ func _tint_enemy(node: Node, tint: Color) -> void:
 		_tint_enemy(child, tint)
 
 
-func _physical_to_canvas(px: float) -> float:
-	if not touch_mode:
-		return px
+func _physical_pixels_to_canvas(px: float) -> float:
 	var win := DisplayServer.window_get_size()
 	var canvas: Vector2 = get_viewport().get_visible_rect().size
 	if win.x <= 0 or win.y <= 0:
 		return px
 	return px * maxf(canvas.x / float(win.x), canvas.y / float(win.y))
+
+
+func _physical_to_canvas(px: float) -> float:
+	return _physical_pixels_to_canvas(px) if touch_mode else px
+
+
+func _menu_scroll_deadzone() -> int:
+	# Keep taps reliable on high-DPI phones while still letting a short drag
+	# become native inertial scrolling quickly.
+	return maxi(8, roundi(_physical_pixels_to_canvas(10.0)))
 
 
 func _touch_slop() -> float:
@@ -1090,13 +1102,36 @@ func _action_button(text: String, action: Callable, parent: Node) -> Button:
 
 
 func _build_more_sheet(root_control: Control) -> void:
-	# All secondary actions live here now; selection callbacks read
-	# selected_building live, so reparenting changes nothing.
+	# Secondary actions use the same phone-friendly scrolling model as every
+	# other long menu: pinned controls plus native inertial vertical scrolling.
 	more_sheet.add_theme_stylebox_override("panel", ui.style(UI.NAVY, UI.EDGE))
 	root_control.add_child(more_sheet)
+	var shell := VBoxContainer.new()
+	shell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	shell.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	shell.add_theme_constant_override("separation", 6)
+	more_sheet.add_child(shell)
+	var controls := HBoxContainer.new()
+	controls.add_theme_constant_override("separation", 6)
+	shell.add_child(controls)
+	more_close_button = ui.command_button("Close", _toggle_more, controls, 40.0)
+	more_close_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	more_scroll_up = ui.command_button("▲", _scroll_more.bind(-1), controls, 40.0)
+	more_scroll_up.tooltip_text = "Scroll actions up"
+	more_scroll_down = ui.command_button("▼", _scroll_more.bind(1), controls, 40.0)
+	more_scroll_down.tooltip_text = "Scroll actions down"
+	more_scroll.name = "MoreScroll"
+	more_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	more_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	more_scroll.follow_focus = true
+	more_scroll.scroll_vertical_custom_step = 72.0
+	more_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	more_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	shell.add_child(more_scroll)
 	var mv := VBoxContainer.new()
+	mv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	mv.add_theme_constant_override("separation", 8)
-	more_sheet.add_child(mv)
+	more_scroll.add_child(mv)
 	ui.heading("ACTIONS", mv)
 	ui.rule(mv)
 	var command_head := Label.new()
@@ -1144,9 +1179,7 @@ func _build_more_sheet(root_control: Control) -> void:
 	_action_button("⟲ Orbit", _orbit_left, system_grid)
 	_action_button("⟳ Orbit", _orbit_right, system_grid)
 	_action_button("Pause / Save", _open_pause, system_grid)
-	_action_button("Close", _toggle_more, system_grid)
 	more_sheet.hide()
-
 
 func _toggle_more() -> void:
 	if panel == "pause":
@@ -1155,6 +1188,8 @@ func _toggle_more() -> void:
 	else:
 		_close_panel()
 	more_sheet.visible = not more_sheet.visible
+	if more_sheet.visible and is_instance_valid(more_scroll):
+		more_scroll.scroll_vertical = 0
 	_paint_more()
 	_layout_ui()
 
@@ -1329,7 +1364,7 @@ func _ui() -> void:
 	side_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	side_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
 	side_scroll.follow_focus = true
-	side_scroll.scroll_deadzone = 0
+	side_scroll.scroll_deadzone = _menu_scroll_deadzone()
 	side_scroll.scroll_vertical_custom_step = 72.0
 	side_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	side_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -1496,9 +1531,10 @@ func _layout_ui() -> void:
 	resource_stack.size = Vector2(stack_width, 0)
 	resource_stack.position = Vector2(size.x - stack_width - safe, safe)
 	if small:
-		# Bottom sheet like the shop ref: full-width, above the bottom bar.
-		var sheet_max: float = maxf(220.0, size.y - bar_h - safe * 3.0 - 96.0)
-		var sheet_h: float = clampf(size.y * 0.56, minf(220.0, sheet_max), sheet_max)
+		# Taller bottom sheet: enough room to understand long menus in one-thumb
+		# use while still leaving a meaningful slice of the village visible.
+		var sheet_max: float = maxf(260.0, size.y - bar_h - safe * 3.0 - 96.0)
+		var sheet_h: float = clampf(size.y * 0.62, minf(260.0, sheet_max), sheet_max)
 		sidebar.position = Vector2(safe, size.y - bar_h - safe - 8.0 - sheet_h)
 		sidebar.size = Vector2(size.x - safe * 2.0, sheet_h)
 	else:
@@ -1510,7 +1546,15 @@ func _layout_ui() -> void:
 		side_scroll_up.visible = small
 	if side_scroll_down != null and is_instance_valid(side_scroll_down):
 		side_scroll_down.visible = small
+	if more_scroll_up != null and is_instance_valid(more_scroll_up):
+		more_scroll_up.visible = small
+	if more_scroll_down != null and is_instance_valid(more_scroll_down):
+		more_scroll_down.visible = small
+	side_scroll.scroll_deadzone = _menu_scroll_deadzone()
 	side_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_ALWAYS if small else ScrollContainer.SCROLL_MODE_AUTO
+	if is_instance_valid(more_scroll):
+		more_scroll.scroll_deadzone = _menu_scroll_deadzone()
+		more_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_ALWAYS if small else ScrollContainer.SCROLL_MODE_AUTO
 	# Compact resource pills on phones: values only, bars stay on desktop.
 	for resource: String in resource_bars:
 		var gauge: ProgressBar = resource_bars[resource]
@@ -1544,6 +1588,13 @@ func _scroll_sidebar(direction: int) -> void:
 		return
 	var page: int = maxi(120, int(side_scroll.size.y * 0.72))
 	side_scroll.scroll_vertical = maxi(0, side_scroll.scroll_vertical + page * direction)
+
+
+func _scroll_more(direction: int) -> void:
+	if more_scroll == null or not is_instance_valid(more_scroll):
+		return
+	var page: int = maxi(120, int(more_scroll.size.y * 0.72))
+	more_scroll.scroll_vertical = maxi(0, more_scroll.scroll_vertical + page * direction)
 
 
 func _open_panel(which: String) -> void:
