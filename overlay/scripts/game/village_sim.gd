@@ -1494,7 +1494,9 @@ func _raid_tick(dt: float) -> void:
 	if not raid_active:
 		# Ambient raids stay out of the onboarding lane until the Chronicle has
 		# taught defenses. Manual/test and scripted warnings still proceed.
-		if not raid_warning and "the-first-horn" not in completed_quests:
+		if not raid_warning and elapsed < 600.0 and "the-first-horn" not in completed_quests:
+			# Give a new player ten active minutes to learn the village unless the
+			# Chronicle deliberately summons the first defense lesson sooner.
 			next_raid_at = maxf(next_raid_at, elapsed + 90.0)
 			return
 		if _hall().get("hp", 0) > 0 and elapsed >= next_raid_at - 25:
