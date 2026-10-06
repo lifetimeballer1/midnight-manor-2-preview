@@ -33,6 +33,24 @@ func _run() -> void:
 	check(finite_positions, "heavy-population simulation keeps valid positions")
 	print("COMMAND_CONTROL_SIM_400_MS ", sim_ms)
 
+	# Raid-start profile: 400 civilians used to all request fresh weighted paths
+	# on the same warning tick, which is the phone hitch reported in large saves.
+	var raid_sim = Sim.new()
+	raid_sim.units.clear()
+	for index in 400:
+		raid_sim._add_unit(["builder", "farmer", "lumberjack", "miner"][index % 4])
+	raid_sim.paused = false
+	check(raid_sim.start_raid(), "raid profiling wave starts")
+	var raid_first_tick_start: int = Time.get_ticks_usec()
+	raid_sim.tick(0.05)
+	var raid_first_tick_ms: float = float(Time.get_ticks_usec() - raid_first_tick_start) / 1000.0
+	var raid_worst_ms: float = raid_first_tick_ms
+	for tick in 79:
+		var raid_tick_start: int = Time.get_ticks_usec()
+		raid_sim.tick(0.05)
+		raid_worst_ms = maxf(raid_worst_ms, float(Time.get_ticks_usec() - raid_tick_start) / 1000.0)
+	print("RAID_START_PROFILE_400 first_warning_ms=", raid_first_tick_ms, " worst_4s_ms=", raid_worst_ms, " enemies=", raid_sim.enemies.size())
+
 	root.size = Vector2i(1280, 800)
 	var packed: PackedScene = load("res://scenes/game.tscn")
 	var game = packed.instantiate()
