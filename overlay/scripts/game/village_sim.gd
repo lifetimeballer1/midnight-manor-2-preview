@@ -55,7 +55,10 @@ var stand_cache: Dictionary = {}
 # Raid alarms used to make every villager request a fresh route on one tick.
 # Keep pathfinding authoritative, but spread NEW friendly plans across frames.
 var alarm_friendly_routes_left: int = 0
-const ALARM_FRIENDLY_ROUTE_BUDGET: int = 12
+const ALARM_FRIENDLY_ROUTE_BUDGET: int = 16
+# Civilians leave a few fresh-route slots available for defenders once the
+# raiders appear, so smoothing the evacuation never makes combat sluggish.
+const ALARM_COMBAT_ROUTE_RESERVE: int = 4
 
 const KITE_TRIGGER: float = 1.5
 const KITE_RELEASE_RATIO: float = 0.7
@@ -1007,7 +1010,7 @@ func _alarm_route_slot_available(u: Dictionary) -> bool:
 		var goal := Vector2i(floori((edge_goal as Vector2).x), floori((edge_goal as Vector2).y))
 		if not cached.is_empty() and cached.get("goal") == goal and cached.get("revision") == revision:
 			return true
-	return alarm_friendly_routes_left > 0
+	return alarm_friendly_routes_left > ALARM_COMBAT_ROUTE_RESERVE
 
 
 func _walk(u: Dictionary, target: Vector2, dt: float, enemy: bool = false) -> bool:
