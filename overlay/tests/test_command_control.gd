@@ -33,6 +33,37 @@ func _run() -> void:
 	check(finite_positions, "heavy-population simulation keeps valid positions")
 	print("COMMAND_CONTROL_SIM_400_MS ", sim_ms)
 
+	# Raid-start profile: 400 civilians used to all request fresh weighted paths
+	# on the same warning tick, which is the phone hitch reported in large saves.
+	var raid_sim = Sim.new()
+	raid_sim.units.clear()
+	for index in 400:
+		raid_sim._add_unit(["builder", "farmer", "lumberjack", "miner"][index % 4])
+	# Established villages already have work/haul paths when the horn sounds.
+	# Seed stale non-evacuation routes so the alarm budget cannot accidentally
+	# treat old path data as a prepared route to safety.
+	for unit: Dictionary in raid_sim.units:
+		raid_sim.paths[int(unit["id"])] = {"goal": Vector2i(19, 15), "revision": raid_sim.revision, "steps": [Vector2i(19, 15)]}
+	raid_sim.paused = false
+	check(raid_sim.start_raid(), "raid profiling wave starts")
+	var nav_before_alarm: int = raid_sim.living.navigation_revision
+	var raid_first_tick_start: int = Time.get_ticks_usec()
+	raid_sim.tick(0.05)
+	var raid_first_tick_ms: float = float(Time.get_ticks_usec() - raid_first_tick_start) / 1000.0
+	var evac_planned: int = 0
+	var hall_id: int = int(raid_sim._hall().get("id", -1))
+	for unit: Dictionary in raid_sim.units:
+		if int(unit.get("edge_bid", -999)) == hall_id:
+			evac_planned += 1
+	check(evac_planned > 0 and evac_planned <= raid_sim.ALARM_FRIENDLY_ROUTE_BUDGET - raid_sim.ALARM_COMBAT_ROUTE_RESERVE, "raid warning staggers civilian evacuation and preserves route capacity for defenders")
+	check(raid_sim.living.navigation_revision == nav_before_alarm, "panic evacuation does not rewrite desire-path navigation")
+	var raid_worst_ms: float = raid_first_tick_ms
+	for tick in 79:
+		var raid_tick_start: int = Time.get_ticks_usec()
+		raid_sim.tick(0.05)
+		raid_worst_ms = maxf(raid_worst_ms, float(Time.get_ticks_usec() - raid_tick_start) / 1000.0)
+	print("RAID_START_PROFILE_400 first_warning_ms=", raid_first_tick_ms, " worst_4s_ms=", raid_worst_ms, " enemies=", raid_sim.enemies.size())
+
 	root.size = Vector2i(1280, 800)
 	var packed: PackedScene = load("res://scenes/game.tscn")
 	var game = packed.instantiate()

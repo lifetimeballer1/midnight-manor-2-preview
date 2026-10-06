@@ -52,6 +52,13 @@ var paths: Dictionary = {}
 var job_timer: float = 0
 var workplace_specs: Dictionary = {}
 var stand_cache: Dictionary = {}
+# Raid alarms used to make every villager request a fresh route on one tick.
+# Keep pathfinding authoritative, but spread NEW friendly plans across frames.
+var alarm_friendly_routes_left: int = 0
+const ALARM_FRIENDLY_ROUTE_BUDGET: int = 16
+# Civilians leave a few fresh-route slots available for defenders once the
+# raiders appear, so smoothing the evacuation never makes combat sluggish.
+const ALARM_COMBAT_ROUTE_RESERVE: int = 4
 
 const KITE_TRIGGER: float = 1.5
 const KITE_RELEASE_RATIO: float = 0.7
@@ -712,7 +719,10 @@ func _blocked(tile: Vector2i, enemy: bool) -> bool:
 
 
 func route(start: Vector2i, goal: Vector2i, enemy: bool = false) -> Array[Vector2i]:
-	if not enemy and living.navigation_revision > 0:
+	# During an alarm the priority is evacuation/combat response, not choosing
+	# the prettiest desire path. Plain BFS is much cheaper and still obeys all
+	# walls, gates and blocked tiles.
+	if not enemy and living.navigation_revision > 0 and not raid_active and not raid_warning:
 		return _weighted_route(start, goal)
 	var result: Array[Vector2i] = []
 	if not _inside(start) or not _inside(goal):
@@ -963,8 +973,16 @@ func _cached_edge_goal(u: Dictionary, b: Dictionary, enemy: bool = false) -> Vec
 	# Type guards: older saves may carry these keys as JSON strings.
 	var cached_tile: Variant = u.get("edge_tile")
 	var cached_goal: Variant = u.get("edge_goal")
-	if u.get("edge_rev") == revision and cached_tile is Vector2i and cached_tile == tile and int(u.get("edge_bid", -999)) == bid and cached_goal is Vector2:
-		return cached_goal
+	if u.get("edge_rev") == revision and int(u.get("edge_bid", -999)) == bid and cached_goal is Vector2:
+		# Alarm routes stay stable across tile boundaries. If a gate/world change
+		# invalidates navigation, _invalidate() clears paths and we probe again.
+		if raid_active or raid_warning:
+			var cached_path: Dictionary = paths.get(int(u["id"]), {})
+			var cached_goal_tile := Vector2i(floori((cached_goal as Vector2).x), floori((cached_goal as Vector2).y))
+			if not cached_path.is_empty() and cached_path.get("goal") == cached_goal_tile and cached_path.get("revision") == revision:
+				return cached_goal
+		elif cached_tile is Vector2i and cached_tile == tile:
+			return cached_goal
 	var goal: Vector2 = _edge_goal(u, b, enemy)
 	u["edge_goal"] = goal
 	u["edge_tile"] = tile
@@ -986,6 +1004,21 @@ func _path_reachable(u: Dictionary, target: Vector2, enemy: bool) -> bool:
 	return not route(start, goal, enemy).is_empty()
 
 
+func _alarm_route_slot_available(u: Dictionary) -> bool:
+	if not raid_active and not raid_warning:
+		return true
+	# An old work/haul path does not count: only an already-planned path to the
+	# Hall edge may bypass this tick's fresh-route budget.
+	var hall_id: int = int(_hall().get("id", -1))
+	var edge_goal: Variant = u.get("edge_goal")
+	var cached: Dictionary = paths.get(int(u["id"]), {})
+	if u.get("edge_rev") == revision and int(u.get("edge_bid", -999)) == hall_id and edge_goal is Vector2:
+		var goal := Vector2i(floori((edge_goal as Vector2).x), floori((edge_goal as Vector2).y))
+		if not cached.is_empty() and cached.get("goal") == goal and cached.get("revision") == revision:
+			return true
+	return alarm_friendly_routes_left > ALARM_COMBAT_ROUTE_RESERVE
+
+
 func _walk(u: Dictionary, target: Vector2, dt: float, enemy: bool = false) -> bool:
 	if target.x < 0:
 		return false
@@ -994,6 +1027,10 @@ func _walk(u: Dictionary, target: Vector2, dt: float, enemy: bool = false) -> bo
 	var goal := Vector2i(floori(target.x), floori(target.y))
 	var cached: Dictionary = paths.get(id, {})
 	if cached.is_empty() or cached.get("goal") != goal or cached.get("revision") != revision:
+		if not enemy and (raid_active or raid_warning):
+			if alarm_friendly_routes_left <= 0:
+				return false
+			alarm_friendly_routes_left -= 1
 		var fresh: Array[Vector2i] = route(start, goal, enemy)
 		if fresh.is_empty():
 			return false
@@ -1005,7 +1042,10 @@ func _walk(u: Dictionary, target: Vector2, dt: float, enemy: bool = false) -> bo
 	var before: Vector2 = position_of(u)
 	var speed: float = (1.2 if enemy else _stat(u, "speed") * living.speed_at(before)) * dt
 	var point: Vector2 = before.move_toward(waypoint, speed)
-	if not enemy:
+	# Panic movement is temporary behavior, not a new village desire path.
+	# Recording it here caused navigation revisions during the raid warning,
+	# clearing hundreds of freshly-built paths and forcing them to rebuild.
+	if not enemy and not raid_active and not raid_warning:
 		living.walked(before, point, elapsed)
 	u["x"] = point.x
 	u["y"] = point.y
@@ -1026,6 +1066,7 @@ func tick(dt: float) -> void:
 	if paused or not is_finite(dt) or dt <= 0 or dt > 1:
 		return
 	tick_count += 1
+	alarm_friendly_routes_left = ALARM_FRIENDLY_ROUTE_BUDGET if raid_active or raid_warning else 0
 	elapsed += dt
 	_gate_tick()
 	job_timer += dt
@@ -1196,6 +1237,8 @@ func _unit_tick(u: Dictionary, dt: float) -> void:
 		return
 	if raid_active or raid_warning:
 		_clear_facing(u)
+		if not _alarm_route_slot_available(u):
+			return
 		_walk(u, _cached_edge_goal(u, _hall()), dt)
 		return
 	if role == "builder":
