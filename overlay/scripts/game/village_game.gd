@@ -13,6 +13,7 @@ const TILE: float = 2.0
 const MAP_ORIGIN := Vector3(-20, 0, -16)
 const ROAD_LIMIT: int = 320
 const EFFECT_LIMIT: int = 24
+const RAID_EFFECT_LIMIT: int = 10
 const MODEL_LIMIT: int = 160
 # Resource glyphs stay monochrome brass so the numbers stay the loudest thing.
 const RESOURCE_GLYPHS: Dictionary = {"wood": "W", "food": "F", "gold": "G", "lumber": "L", "stone": "S"}
@@ -665,10 +666,13 @@ func _apply_lighting() -> void:
 	environment.fog_sky_affect = 0.0 if night else 1.0
 	sun.light_color = Color("ffc48a") if night else Color("fff2cf")
 	sun.light_energy = 0.85 if night else 1.0
+	var ambient_fx: bool = night and not battery_saver and not sim.raid_active and not sim.raid_warning
 	if is_instance_valid(fireflies):
-		fireflies.visible = night and not battery_saver
+		fireflies.visible = ambient_fx
+		fireflies.emitting = ambient_fx
 	if is_instance_valid(mist):
-		mist.visible = night and not battery_saver
+		mist.visible = ambient_fx
+		mist.emitting = ambient_fx
 	if is_instance_valid(stars):
 		stars.visible = night
 	_update_light_pool()
@@ -924,6 +928,19 @@ func _update_actors(delta: float) -> void:
 		for u: Dictionary in group:
 			var id: int = int(u["id"])
 			present[id] = true
+			var civilian_sheltered: bool = false
+			if not enemy_group and (sim.raid_active or sim.raid_warning):
+				civilian_sheltered = str(sim.troop_specs[u["type"]]["role"]) != "combat"
+			if civilian_sheltered:
+				if actors.has(id):
+					var hidden_record: Dictionary = actors[id]
+					var hidden_model: Node3D = hidden_record["model"]
+					hidden_model.visible = false
+					hidden_model.process_mode = Node.PROCESS_MODE_DISABLED
+					var hidden_player: AnimationPlayer = hidden_record["player"]
+					if hidden_player != null:
+						hidden_player.speed_scale = 0.0
+				continue
 			if not actors.has(id):
 				var asset: String = _enemy_asset(u) if enemy_group else "char_" + str(u["type"])
 				var spawned: Node3D = _model(asset)
@@ -934,6 +951,8 @@ func _update_actors(delta: float) -> void:
 				actors[id] = {"model": spawned, "player": _find_player_cached(asset, spawned), "clip": "", "previous": Vector3.ZERO}
 			var record: Dictionary = actors[id]
 			var model: Node3D = record["model"]
+			if model.process_mode == Node.PROCESS_MODE_DISABLED:
+				model.process_mode = Node.PROCESS_MODE_INHERIT
 			var destination: Vector3 = world_position(sim.position_of(u))
 			var travel: Vector3 = destination - model.position
 			var requested: String = str(u.get("phase", "idle"))
@@ -2733,6 +2752,8 @@ func _refresh_hud() -> void:
 	# One horn tick on the rising edge of an alarm; the music mood already
 	# carries the sustained danger, so this never repeats while held.
 	var alarm: bool = sim.raid_active or sim.raid_warning
+	if alarm != alarm_latched:
+		_apply_lighting()
 	if alarm and not alarm_latched and started and sound:
 		sfx.play()
 	alarm_latched = alarm
@@ -2861,10 +2882,12 @@ func _consume_events() -> void:
 	for index in range(effect_nodes.size() - 1, -1, -1):
 		if not is_instance_valid(effect_nodes[index]):
 			effect_nodes.remove_at(index)
+	var effect_cap: int = RAID_EFFECT_LIMIT if sim.raid_active or sim.raid_warning else EFFECT_LIMIT
 	for event: Dictionary in sim.events:
-		# Effects are decoration only; the cap keeps a busy raid from flooding the scene.
-		if effect_nodes.size() >= EFFECT_LIMIT:
-			break
+		# Effects are decoration only. Busy combat gets a tighter cap, but raid
+		# result banners are never dropped just because damage labels are full.
+		if event.get("kind") != "raid_result" and effect_nodes.size() >= effect_cap:
+			continue
 		if event.get("kind") == "collect":
 			var label := Label3D.new()
 			label.text = "+%d %s" % [event["amount"], str(event["resource"]).capitalize()]
@@ -2939,11 +2962,13 @@ func _process(delta: float) -> void:
 		_rebuild_buildings()
 	_update_roads()
 	lamp_accumulator += delta
-	if night and lamp_accumulator >= (0.20 if battery_saver else 0.10):
+	var lamp_step: float = 0.25 if sim.raid_active or sim.raid_warning else (0.20 if battery_saver else 0.10)
+	if night and lamp_accumulator >= lamp_step:
 		_flicker_lamps()
 		lamp_accumulator = 0.0
 	actor_accumulator += delta
-	var actor_step: float = 0.08 if battery_saver else 0.05
+	var alarm_now: bool = sim.raid_active or sim.raid_warning
+	var actor_step: float = 0.08 if battery_saver else (0.067 if alarm_now else 0.05)
 	if actor_accumulator >= actor_step:
 		var spike_actors_start: int = Time.get_ticks_usec() if spike_active else 0
 		_update_actors(actor_accumulator)
@@ -2972,7 +2997,8 @@ func _process(delta: float) -> void:
 					f.store_string("\n".join(spike_lines) + "\n")
 				spike_lines.clear()
 	detail_accumulator += delta
-	if detail_accumulator >= (0.10 if battery_saver else 0.05):
+	var detail_step: float = 0.14 if sim.raid_active or sim.raid_warning else (0.10 if battery_saver else 0.05)
+	if detail_accumulator >= detail_step:
 		details.update(self, detail_accumulator)
 		detail_accumulator = 0.0
 	_consume_events()

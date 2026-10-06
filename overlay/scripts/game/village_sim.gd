@@ -55,10 +55,11 @@ var stand_cache: Dictionary = {}
 # Raid alarms used to make every villager request a fresh route on one tick.
 # Keep pathfinding authoritative, but spread NEW friendly plans across frames.
 var alarm_friendly_routes_left: int = 0
-const ALARM_FRIENDLY_ROUTE_BUDGET: int = 16
-# Civilians leave a few fresh-route slots available for defenders once the
-# raiders appear, so smoothing the evacuation never makes combat sluggish.
-const ALARM_COMBAT_ROUTE_RESERVE: int = 4
+# Civilians now shelter without pathfinding, so this budget belongs entirely
+# to defenders. Eight fresh plans per 50 ms tick keeps combat responsive while
+# preventing a 30-40 defender route burst from stalling one rendered frame.
+const ALARM_FRIENDLY_ROUTE_BUDGET: int = 8
+const ALARM_COMBAT_ROUTE_RESERVE: int = 0
 
 const KITE_TRIGGER: float = 1.5
 const KITE_RELEASE_RATIO: float = 0.7
@@ -1084,9 +1085,12 @@ func tick(dt: float) -> void:
 		var spec: Dictionary = building_specs[b["type"]]
 		if spec.get("production") != null:
 			var posted: bool = false
-			for u in units:
-				if int(u["workplace"]) == int(b["id"]) and u["hp"] > 0 and u["order"].is_empty() and not u["hold"] and not raid_active and not raid_warning:
-					posted = true
+			# The alarm pauses civilian work. Do not scan hundreds of villagers for
+			# every producer just to discover that nobody is allowed to be posted.
+			if not raid_active and not raid_warning:
+				for u in units:
+					if int(u["workplace"]) == int(b["id"]) and u["hp"] > 0 and u["order"].is_empty() and not u["hold"]:
+						posted = true
 			var rate: float = float(spec["rate"]) * float(spec["tiers"][int(b["tier"]) - 1]["rateMultiplier"]) * (1.25 if posted else 1.0)
 			# Moon Orchards / Full Granaries: food production, not a flat buff.
 			if str(spec.get("production", "")) == "food":
@@ -1223,23 +1227,24 @@ func _unit_tick(u: Dictionary, dt: float) -> void:
 		return
 	u["phase"] = "idle"
 	u["think"] = maxf(0.0, float(u.get("think", 0.0)) - dt)
+	var role: String = str(troop_specs[u["type"]]["role"])
+	if role != "combat" and (raid_active or raid_warning):
+		# Shelter overrides old/manual civilian orders too. Otherwise a large save
+		# can still keep dozens of civilians pathfinding because they happened to
+		# have an order when the horn sounded.
+		_clear_facing(u)
+		u["phase"] = "shelter"
+		return
 	if not u["order"].is_empty():
-		if u["hold"] and troop_specs[u["type"]]["role"] == "combat":
+		if u["hold"] and role == "combat":
 			_fighter(u, dt)
 		elif not u["hold"]:
 			_clear_facing(u)
 			if _walk(u, Vector2(float(u["order"][0]), float(u["order"][1])), dt):
 				u["order"] = []
 		return
-	var role: String = str(troop_specs[u["type"]]["role"])
 	if role == "combat":
 		_fighter(u, dt)
-		return
-	if raid_active or raid_warning:
-		_clear_facing(u)
-		if not _alarm_route_slot_available(u):
-			return
-		_walk(u, _cached_edge_goal(u, _hall()), dt)
 		return
 	if role == "builder":
 		for b in buildings:
