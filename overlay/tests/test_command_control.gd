@@ -60,6 +60,18 @@ func _run() -> void:
 		if (record["model"] as Node3D).visible:
 			visible += 1
 	check(visible < 50, "off-screen actor culling drops insignificant villagers from rendering")
+
+	game._open_panel("people")
+	await process_frame
+	await process_frame
+	check(game.side_scroll != null and game.side_scroll.vertical_scroll_mode != ScrollContainer.SCROLL_MODE_DISABLED, "long manor panels retain vertical scrolling")
+	check(game.side_content.get_combined_minimum_size().y > game.side_scroll.size.y, "400-person menu exceeds the viewport and remains scrollable")
+	check(game.side_close_button != null and game.side_close_button.get_parent() != game.side_content, "menu close control stays pinned outside scrolling content")
+	var scroll_before: int = game.side_scroll.scroll_vertical
+	game._scroll_sidebar(1)
+	await process_frame
+	check(game.side_scroll.scroll_vertical > scroll_before, "phone menu paging control advances long menus")
+
 	game.battery_saver = true
 	game._apply_power_settings()
 	check(Engine.max_fps == 30, "battery saver caps rendering at 30 fps")
