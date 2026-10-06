@@ -41,9 +41,12 @@ func _run() -> void:
 		raid_sim._add_unit(["builder", "farmer", "lumberjack", "miner"][index % 4])
 	raid_sim.paused = false
 	check(raid_sim.start_raid(), "raid profiling wave starts")
+	var nav_before_alarm: int = raid_sim.living.navigation_revision
 	var raid_first_tick_start: int = Time.get_ticks_usec()
 	raid_sim.tick(0.05)
 	var raid_first_tick_ms: float = float(Time.get_ticks_usec() - raid_first_tick_start) / 1000.0
+	check(raid_sim.paths.size() <= raid_sim.ALARM_FRIENDLY_ROUTE_BUDGET, "raid warning staggers fresh civilian route plans instead of planning all 400 at once")
+	check(raid_sim.living.navigation_revision == nav_before_alarm, "panic evacuation does not rewrite desire-path navigation")
 	var raid_worst_ms: float = raid_first_tick_ms
 	for tick in 79:
 		var raid_tick_start: int = Time.get_ticks_usec()
