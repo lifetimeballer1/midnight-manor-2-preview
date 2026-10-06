@@ -1227,24 +1227,24 @@ func _unit_tick(u: Dictionary, dt: float) -> void:
 		return
 	u["phase"] = "idle"
 	u["think"] = maxf(0.0, float(u.get("think", 0.0)) - dt)
+	var role: String = str(troop_specs[u["type"]]["role"])
+	if role != "combat" and (raid_active or raid_warning):
+		# Shelter overrides old/manual civilian orders too. Otherwise a large save
+		# can still keep dozens of civilians pathfinding because they happened to
+		# have an order when the horn sounded.
+		_clear_facing(u)
+		u["phase"] = "shelter"
+		return
 	if not u["order"].is_empty():
-		if u["hold"] and troop_specs[u["type"]]["role"] == "combat":
+		if u["hold"] and role == "combat":
 			_fighter(u, dt)
 		elif not u["hold"]:
 			_clear_facing(u)
 			if _walk(u, Vector2(float(u["order"][0]), float(u["order"][1])), dt):
 				u["order"] = []
 		return
-	var role: String = str(troop_specs[u["type"]]["role"])
 	if role == "combat":
 		_fighter(u, dt)
-		return
-	if raid_active or raid_warning:
-		# Civilians are not valid combat targets, so marching 300-400 individual
-		# models to the Hall was pure simulation/render cost. Treat the alarm as
-		# actual shelter: stop civilian AI until the horn clears.
-		_clear_facing(u)
-		u["phase"] = "shelter"
 		return
 	if role == "builder":
 		for b in buildings:
