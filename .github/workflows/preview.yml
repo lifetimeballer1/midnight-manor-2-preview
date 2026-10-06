@@ -6,12 +6,10 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
-  group: preview-pages
+  group: preview-build
   cancel-in-progress: true
 
 env:
@@ -19,7 +17,7 @@ env:
   GODOT_STATUS: stable
 
 jobs:
-  export:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout current gbt preview source
@@ -69,6 +67,7 @@ jobs:
         run: |
           mkdir -p build/web
           godot --headless --path . --export-release "Web" build/web/index.html
+          touch build/web/.nojekyll
           ls -la build/web
 
       - name: Guard Safari compatibility
@@ -80,23 +79,17 @@ jobs:
             || (echo "FAIL: exported preview has threads enabled" && exit 1)
           echo "Safari guard PASS: single-threaded preview build"
 
-      - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
-        with:
-          enablement: true
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: source/build/web
-
-  deploy:
-    needs: export
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy preview to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Publish compiled preview branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eux
+          cd source/build/web
+          git init
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b gh-pages
+          git add -A
+          git commit -m "Publish gbt phone preview"
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push --force origin gh-pages
