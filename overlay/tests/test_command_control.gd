@@ -33,36 +33,50 @@ func _run() -> void:
 	check(finite_positions, "heavy-population simulation keeps valid positions")
 	print("COMMAND_CONTROL_SIM_400_MS ", sim_ms)
 
-	# Raid-start profile: 400 civilians used to all request fresh weighted paths
-	# on the same warning tick, which is the phone hitch reported in large saves.
+	# Raid performance profile: large saves should shelter civilians instead of
+	# turning the settlement into a 400-character evacuation/render crowd.
 	var raid_sim = Sim.new()
 	raid_sim.units.clear()
 	for index in 400:
-		raid_sim._add_unit(["builder", "farmer", "lumberjack", "miner"][index % 4])
-	# Established villages already have work/haul paths when the horn sounds.
-	# Seed stale non-evacuation routes so the alarm budget cannot accidentally
-	# treat old path data as a prepared route to safety.
-	for unit: Dictionary in raid_sim.units:
-		raid_sim.paths[int(unit["id"])] = {"goal": Vector2i(19, 15), "revision": raid_sim.revision, "steps": [Vector2i(19, 15)]}
+		var unit_type: String = ["builder", "farmer", "lumberjack", "miner"][index % 4]
+		if index % 20 == 0:
+			unit_type = "warrior"
+		elif index % 20 == 10:
+			unit_type = "archer"
+		raid_sim._add_unit(unit_type)
 	raid_sim.paused = false
 	check(raid_sim.start_raid(), "raid profiling wave starts")
 	var nav_before_alarm: int = raid_sim.living.navigation_revision
-	var raid_first_tick_start: int = Time.get_ticks_usec()
+	var warning_start: int = Time.get_ticks_usec()
 	raid_sim.tick(0.05)
-	var raid_first_tick_ms: float = float(Time.get_ticks_usec() - raid_first_tick_start) / 1000.0
-	var evac_planned: int = 0
-	var hall_id: int = int(raid_sim._hall().get("id", -1))
+	var warning_ms: float = float(Time.get_ticks_usec() - warning_start) / 1000.0
+	var sheltered: int = 0
+	var defenders: int = 0
 	for unit: Dictionary in raid_sim.units:
-		if int(unit.get("edge_bid", -999)) == hall_id:
-			evac_planned += 1
-	check(evac_planned > 0 and evac_planned <= raid_sim.ALARM_FRIENDLY_ROUTE_BUDGET - raid_sim.ALARM_COMBAT_ROUTE_RESERVE, "raid warning staggers civilian evacuation and preserves route capacity for defenders")
-	check(raid_sim.living.navigation_revision == nav_before_alarm, "panic evacuation does not rewrite desire-path navigation")
-	var raid_worst_ms: float = raid_first_tick_ms
-	for tick in 79:
-		var raid_tick_start: int = Time.get_ticks_usec()
+		if str(raid_sim.troop_specs[unit["type"]]["role"]) == "combat":
+			defenders += 1
+		elif str(unit.get("phase", "")) == "shelter":
+			sheltered += 1
+	check(sheltered == raid_sim.units.size() - defenders, "every civilian shelters without raid movement/pathfinding")
+	check(raid_sim.living.navigation_revision == nav_before_alarm, "sheltering does not rewrite desire-path navigation")
+	# Force the active wave now, keep enemies alive, then profile sustained combat.
+	raid_sim.wave = 7
+	raid_sim.next_raid_at = raid_sim.elapsed
+	raid_sim.tick(0.05)
+	for enemy: Dictionary in raid_sim.enemies:
+		enemy["hp"] = 100000.0
+		enemy["max_hp"] = 100000.0
+	var active_worst_ms: float = 0.0
+	var active_total_ms: float = 0.0
+	for tick in 80:
+		var active_start: int = Time.get_ticks_usec()
 		raid_sim.tick(0.05)
-		raid_worst_ms = maxf(raid_worst_ms, float(Time.get_ticks_usec() - raid_tick_start) / 1000.0)
-	print("RAID_START_PROFILE_400 first_warning_ms=", raid_first_tick_ms, " worst_4s_ms=", raid_worst_ms, " enemies=", raid_sim.enemies.size())
+		var active_ms: float = float(Time.get_ticks_usec() - active_start) / 1000.0
+		active_total_ms += active_ms
+		active_worst_ms = maxf(active_worst_ms, active_ms)
+	check(raid_sim.raid_active and raid_sim.enemies.size() == 8, "sustained profile keeps a full eight-enemy raid active")
+	print("RAID_SUSTAINED_PROFILE_400 warning_ms=", warning_ms, " avg_active_ms=", active_total_ms / 80.0, " worst_active_ms=", active_worst_ms, " sheltered=", sheltered, " defenders=", defenders)
+
 
 	root.size = Vector2i(1280, 800)
 	var packed: PackedScene = load("res://scenes/game.tscn")
@@ -83,6 +97,32 @@ func _run() -> void:
 	var first_sync_ms: int = Time.get_ticks_msec() - render_start
 	check(game.actors.size() == 400, "20 Hz visual sync catches up to all 400 villagers")
 	print("COMMAND_CONTROL_RENDER_400_FIRST_SYNC_MS ", first_sync_ms)
+	game.target = Vector3.ZERO
+	game._camera_update()
+	game.sim.raid_warning = true
+	game._apply_lighting()
+	var shelter_render_start: int = Time.get_ticks_usec()
+	game._update_actors(0.067)
+	var shelter_render_ms: float = float(Time.get_ticks_usec() - shelter_render_start) / 1000.0
+	var hidden_shelter: int = 0
+	var disabled_shelter: int = 0
+	for record: Dictionary in game.actors.values():
+		var actor_model: Node3D = record["model"]
+		if not actor_model.visible:
+			hidden_shelter += 1
+		if actor_model.process_mode == Node.PROCESS_MODE_DISABLED:
+			disabled_shelter += 1
+	check(hidden_shelter == 400 and disabled_shelter == 400, "raid warning hides and disables all non-combat crowd models")
+	check(not game.fireflies.emitting and not game.mist.emitting, "raid visual budget disables ambient particles")
+	print("RAID_RENDER_SHELTER_400_MS ", shelter_render_ms)
+	game.sim.raid_warning = false
+	game._apply_lighting()
+	game._update_actors(0.05)
+	var still_disabled: int = 0
+	for record: Dictionary in game.actors.values():
+		if (record["model"] as Node3D).process_mode == Node.PROCESS_MODE_DISABLED:
+			still_disabled += 1
+	check(still_disabled == 0, "civilian actors resume after the alarm clears")
 	game.target = Vector3(200, 0, 200)
 	game._camera_update()
 	game._update_actors(0.05)
