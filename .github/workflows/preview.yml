@@ -37,7 +37,7 @@ jobs:
           git checkout "$SOURCE_SHA"
           echo "Preview source: $(git rev-parse HEAD)"
 
-      - name: Apply preview overlay (test fix from PR #2)
+      - name: Apply preview overlay (test fix from PR #2, loading screen from midnight-manor-2 claude/project-thread-kidafy)
         run: |
           rsync -a staging/overlay/ source/
 
@@ -88,6 +88,7 @@ jobs:
           godot --headless --path . --script res://tests/test_wall_rows.gd -- --no-save
           godot --headless --path . --script res://tests/test_realm.gd -- --no-save
           godot --headless --path . --script res://tests/test_realm_life.gd -- --no-save
+          godot --headless --path . --script res://tests/test_loading_screen.gd -- --no-save
 
       - name: Export Web
         working-directory: source

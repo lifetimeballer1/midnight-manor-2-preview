@@ -1,0 +1,43 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
+
+config_version=5
+
+[application]
+
+config/name="Midnight Manor II"
+config/version="1.0.0"
+run/main_scene="res://scenes/loading.tscn"
+config/features=PackedStringArray("4.7")
+boot_splash/bg_color=Color(0.027, 0.039, 0.086, 1)
+boot_splash/image="res://ui/loading/boot_splash.png"
+
+[autoload]
+
+VFX="*uid://ecyiymmaj3jv"
+EnvVFX="*uid://qomyut16hnoi"
+
+[display]
+
+window/size/viewport_width=390
+window/size/viewport_height=844
+window/size/window_width_override=1280
+window/size/window_height_override=800
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+display/window/handheld/orientation=6
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/asset_placer/plugin.cfg", "res://addons/debug_menu/plugin.cfg", "res://addons/funplay_mcp/plugin.cfg", "res://addons/godot_mcp/plugin.cfg", "res://addons/manor_studio/plugin.cfg", "res://addons/vfx_library/plugin.cfg")
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+environment/defaults/default_clear_color=Color(0.12, 0.17, 0.23, 1)
