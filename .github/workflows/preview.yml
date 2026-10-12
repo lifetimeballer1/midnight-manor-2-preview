@@ -1,4 +1,4 @@
-name: Midnight Manor II Command & Control Preview
+name: Midnight Manor II Preview
 
 on:
   pull_request:
@@ -19,7 +19,7 @@ permissions:
 env:
   GODOT_VERSION: 4.7.2
   GODOT_STATUS: stable
-  SOURCE_SHA: 1e51468d492bd047bf434ae65aba09fe5efcfb42
+  SOURCE_SHA: 104e579004ce39e86cae083a6a495a19901a71b7
 
 jobs:
   verify-and-preview:
@@ -35,9 +35,9 @@ jobs:
           git clone https://github.com/lifetimeballer1/midnight-manor-2.git source
           cd source
           git checkout "$SOURCE_SHA"
-          echo "Command & Control base: $(git rev-parse HEAD)"
+          echo "Preview source: $(git rev-parse HEAD)"
 
-      - name: Apply Command & Control overlay
+      - name: Apply preview overlay (test fix from PR #2)
         run: |
           rsync -a staging/overlay/ source/
 
@@ -77,6 +77,17 @@ jobs:
           godot --headless --path . --script res://tests/test_update2_scene.gd -- --no-save
           godot --headless --path . --script res://tests/test_chronicle.gd -- --no-save
           godot --headless --path . --script res://tests/test_command_control.gd -- --no-save
+          godot --headless --path . --script res://tests/test_overhaul_foundation.gd -- --no-save
+          godot --headless --path . --script res://tests/test_village_needs.gd -- --no-save
+          godot --headless --path . --script res://tests/test_frontier_battles.gd -- --no-save
+          godot --headless --path . --script res://tests/test_campaign_actions.gd -- --no-save
+          godot --headless --path . --script res://tests/test_combat_vfx.gd -- --no-save
+          godot --headless --path . --script res://tests/test_raid_navigation_cache.gd -- --no-save
+          godot --headless --path . --script res://tests/test_manor_studio.gd -- --no-save
+          godot --headless --path . --script res://tests/test_home_raid_scoring.gd -- --no-save
+          godot --headless --path . --script res://tests/test_wall_rows.gd -- --no-save
+          godot --headless --path . --script res://tests/test_realm.gd -- --no-save
+          godot --headless --path . --script res://tests/test_realm_life.gd -- --no-save
 
       - name: Export Web
         working-directory: source
@@ -106,6 +117,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "Preview already current."
           else
-            git commit -m "Publish Command & Control preview build"
+            git commit -m "Publish preview build of ${SOURCE_SHA}"
             git push origin main
           fi
