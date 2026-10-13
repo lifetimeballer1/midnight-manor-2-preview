@@ -1,6 +1,6 @@
 # Midnight Manor II Preview
 
-Phone-test deployment for the newest Midnight Manor II work (the Realm open world map, PR #3 in `lifetimeballer1/midnight-manor-2`).
+Phone-test deployment for the newest Midnight Manor II work: the Realm open world map (PR #3) with its new terrain, river, bridges, stilts and fishing (PR #4) in `lifetimeballer1/midnight-manor-2`.
 
 The preview workflow:
 - checks out the pinned source commit (`SOURCE_SHA` in the workflow)
