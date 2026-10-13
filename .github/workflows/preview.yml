@@ -19,7 +19,7 @@ permissions:
 env:
   GODOT_VERSION: 4.7.2
   GODOT_STATUS: stable
-  SOURCE_SHA: 96d690741c8c20f0d5c92cc96b3258ce284a82bf
+  SOURCE_SHA: 8e7cce0966e235f50e0fb5fe88702f0267bf1010
 
 jobs:
   verify-and-preview:
@@ -37,7 +37,7 @@ jobs:
           git checkout "$SOURCE_SHA"
           echo "Preview source: $(git rev-parse HEAD)"
 
-      - name: Apply preview overlay (test fix from PR #2, loading screen from midnight-manor-2 claude/project-thread-kidafy)
+      - name: Apply preview overlay (now identical to main; kept for future preview-only files)
         run: |
           rsync -a staging/overlay/ source/
 
