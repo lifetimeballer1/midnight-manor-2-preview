@@ -19,7 +19,7 @@ permissions:
 env:
   GODOT_VERSION: 4.7.2
   GODOT_STATUS: stable
-  SOURCE_SHA: 010577da13873f460a0d568986972e62c6251870
+  SOURCE_SHA: 72fd1318c8c9e1056dd9524177009a062b9339b6
 
 jobs:
   verify-and-preview:
@@ -91,6 +91,7 @@ jobs:
           godot --headless --path . --script res://tests/test_realm_terrain.gd -- --no-save
           godot --headless --path . --script res://tests/test_loading_screen.gd -- --no-save
           godot --headless --path . --script res://tests/test_town_zoning.gd -- --no-save
+          godot --headless --path . --script res://tests/test_village_zoning.gd -- --no-save
 
       - name: Export Web
         working-directory: source
