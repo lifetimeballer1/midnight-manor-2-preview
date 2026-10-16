@@ -19,7 +19,7 @@ permissions:
 env:
   GODOT_VERSION: 4.7.2
   GODOT_STATUS: stable
-  SOURCE_SHA: 80c071ced75df49edbf4f422b96693036fe22d46
+  SOURCE_SHA: b30d38aa2a90e05b2f05bf1f85eaa53db0e9993d
 
 jobs:
   verify-and-preview:
