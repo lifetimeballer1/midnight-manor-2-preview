@@ -19,7 +19,7 @@ permissions:
 env:
   GODOT_VERSION: 4.7.2
   GODOT_STATUS: stable
-  SOURCE_SHA: 0151f5718ff4dc4929570d3a89f5b1093144dc7a
+  SOURCE_SHA: 80c071ced75df49edbf4f422b96693036fe22d46
 
 jobs:
   verify-and-preview:
@@ -101,6 +101,7 @@ jobs:
           godot --headless --path . --script res://tests/test_raid_aftermath.gd -- --no-save
           godot --headless --path . --script res://tests/test_moon_harvest.gd -- --no-save
           godot --headless --path . --script res://tests/test_gear_chain.gd -- --no-save
+          godot --headless --path . --script res://tests/test_autosave_scale.gd -- --no-save
 
       - name: Export Web
         working-directory: source
