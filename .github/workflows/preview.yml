@@ -19,7 +19,7 @@ permissions:
 env:
   GODOT_VERSION: 4.7.2
   GODOT_STATUS: stable
-  SOURCE_SHA: f9ecbb4ca233462b5443a87ec6caca5440b17461
+  SOURCE_SHA: d807f0985066c82461284336c13b033939ec649d
 
 jobs:
   verify-and-preview:
@@ -94,6 +94,9 @@ jobs:
           godot --headless --path . --script res://tests/test_village_zoning.gd -- --no-save
           godot --headless --path . --script res://tests/test_phone_menus.gd -- --no-save
           godot --headless --path . --script res://tests/test_raid_engagement.gd -- --no-save
+          godot --headless --path . --script res://tests/test_workplace_perks.gd -- --no-save
+          godot --headless --path . --script res://tests/test_building_materials.gd -- --no-save
+          godot --headless --path . --script res://tests/test_food_chain.gd -- --no-save
 
       - name: Export Web
         working-directory: source
