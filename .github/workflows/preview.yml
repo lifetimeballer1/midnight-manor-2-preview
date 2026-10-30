@@ -19,7 +19,7 @@ permissions:
 env:
   GODOT_VERSION: 4.7.2
   GODOT_STATUS: stable
-  SOURCE_SHA: d19e6f91d92ade111e53ddf3d88f139807b77fb3
+  SOURCE_SHA: 2dbf883955364e66ed05376c416a8377fb0be476
 
 jobs:
   verify-and-preview:
@@ -110,6 +110,11 @@ jobs:
           godot --headless --path . --script res://tests/test_threat_meter.gd -- --no-save
           godot --headless --path . --script res://tests/test_stewards.gd -- --no-save
           godot --headless --path . --script res://tests/test_soundscape.gd -- --no-save
+          godot --headless --path . --script res://tests/test_big_numbers.gd -- --no-save
+          godot --headless --path . --script res://tests/test_daily_return.gd -- --no-save
+          godot --headless --path . --script res://tests/test_weapon_drill.gd -- --no-save
+          godot --headless --path . --script res://tests/test_unite_vale.gd -- --no-save
+          godot --headless --path . --script res://tests/test_manor_renewal.gd -- --no-save
 
       - name: Export Web
         working-directory: source
